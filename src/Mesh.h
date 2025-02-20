@@ -4,6 +4,7 @@
 #include <glm.hpp>
 
 #include <vector>
+#include <string>
 
 class Shader;
 
@@ -17,7 +18,8 @@ struct Vertex
 struct Texture
 {
     unsigned int ID;
-    std::string type;
+    std::string Type;
+    std::string Path;
 };
 
 class Mesh

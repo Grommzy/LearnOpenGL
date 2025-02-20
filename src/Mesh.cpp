@@ -9,6 +9,8 @@ Mesh::Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std:
     this->vertices = vertices;
     this->indices = indices;
     this->textures = textures;
+
+    SetupMesh();
 }
 
 void Mesh::SetupMesh()
@@ -51,7 +53,7 @@ void Mesh::Draw(Shader &shader)
 
         // Retrieve texture number (texture_diffuseN).
         std::string number;
-        std::string name = textures[i].type;
+        std::string name = textures[i].Type;
 
         if (name == "texture_diffuse")
         {

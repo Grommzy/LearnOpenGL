@@ -9,6 +9,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
 set(ENGINE_SRC
     src/main.cpp
     src/Shader.cpp
+    src/Model.cpp
+    src/Mesh.cpp
     # ...
 )
 
@@ -34,4 +36,5 @@ target_include_directories(EngineSrc PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/external/STB_Image
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glm
     ${CMAKE_CURRENT_SOURCE_DIR}/external/assimp/include
+    ${CMAKE_CURRENT_BINARY_DIR}/external/assimp/include # NOTE: Binary Directory
 )
