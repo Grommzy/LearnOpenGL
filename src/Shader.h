@@ -26,7 +26,7 @@ public:
 
     // Utility uniform function - Vector3
     void SetVec3(const std::string &name, float x, float y, float z) const;
-    void SetVec3(const std::string &name, glm::vec3 &value) const;
+    void SetVec3(const std::string &name, const glm::vec3 &value) const;
 
     // Retrieve the private ID of the shader
     unsigned int GetID();

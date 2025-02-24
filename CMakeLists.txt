@@ -11,6 +11,7 @@ set(ENGINE_SRC
     src/Shader.cpp
     src/Model.cpp
     src/Mesh.cpp
+    src/Camera.cpp
     # ...
 )
 
