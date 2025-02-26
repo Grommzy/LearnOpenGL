@@ -40,6 +40,7 @@ int main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
     // Create an SDL window with an OpenGL context flag
     SDL_Window* window = SDL_CreateWindow("LearnOpenGL", 1920, 1080, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MOUSE_GRABBED | SDL_WINDOW_MOUSE_RELATIVE_MODE);
@@ -79,6 +80,7 @@ int main(int argc, char* argv[])
     Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
     Shader shaderProgram("../../shaders/shader.vs", "../../shaders/shader.fs");
+    Shader outlineShader("../../shaders/shader.vs", "../../shaders/outlineColour.fs");
     shaderProgram.Use();
 
     // DirectionalLight
@@ -127,6 +129,7 @@ int main(int argc, char* argv[])
     bool running = true;
     SDL_Event event;
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_STENCIL_TEST);
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Model backpack("../../resources/Backpack/backpack.obj");
@@ -140,11 +143,15 @@ int main(int argc, char* argv[])
         running = ProcessInput(window, event, camera);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         viewMatrix = camera.GetViewMatrix();
         projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 800.0f / 600.0f, 0.1f, 100.0f);
         shaderProgram.SetVec3("viewPos", camera.GetPosition());
+
+        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
+        glStencilMask(0xFF);                        // Enables writing to the stencil buffer
 
         shaderProgram.Use();
 
@@ -156,6 +163,29 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
         backpack.Draw(shaderProgram);
+
+        glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+        glStencilMask(0x00);                  // Disables writing to the stencil buffer
+        glDisable(GL_DEPTH_TEST);
+
+        outlineShader.Use();
+
+        // Scale up backpack for outlining
+        modelMatrix = glm::scale(modelMatrix, glm::vec3(1.05f, 1.05f, 1.05f));
+
+        modelMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "modelMatrix");
+        viewMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "viewMatrix");
+        projectionMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "projectionMatrix");
+        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        backpack.Draw(outlineShader);
+
+        modelMatrix = glm::mat4(1.0f);
+        glStencilMask(0xFF);
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);   
+        glEnable(GL_DEPTH_TEST);
 
         SDL_GL_SwapWindow(window);
     }
