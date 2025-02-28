@@ -4,10 +4,12 @@
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
+#include <stb_image.h>
 
 #include <iostream>
 #include <math.h>
 #include <string>
+#include <map>
 
 #include "Shader.h"
 #include "Model.h"
@@ -22,6 +24,13 @@ glm::vec3 pointLightPositions[] = {
 	glm::vec3( 2.3f, -3.3f, -4.0f),
 	glm::vec3(-4.0f,  2.0f, -12.0f),
 	glm::vec3( 0.0f,  0.0f, -3.0f)
+};
+
+glm::vec3 windowPanePositions[] = {
+    glm::vec3( 0.0f,  0.0f,  2.0f),
+    glm::vec3( 0.0f,  0.0f,  3.0f),
+    glm::vec3( 1.0f,  0.0f,  4.0f),
+    glm::vec3(-1.0f,  0.0f,  1.0f)
 };
 
 float deltaTime = 0.0f;	// Time between current frame and last frame
@@ -80,7 +89,7 @@ int main(int argc, char* argv[])
     Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
     Shader shaderProgram("../../shaders/shader.vs", "../../shaders/shader.fs");
-    Shader outlineShader("../../shaders/shader.vs", "../../shaders/outlineColour.fs");
+    Shader blendingShader("../../shaders/shader.vs", "../../shaders/blending.fs");
     shaderProgram.Use();
 
     // DirectionalLight
@@ -94,7 +103,7 @@ int main(int argc, char* argv[])
     shaderProgram.SetFloat("pointLight[0].linearAttenuation",    0.09f);
     shaderProgram.SetFloat("pointLight[0].quadraticAttenuation", 0.032f);
     shaderProgram.SetVec3("pointLight[0].ambient", 0.2f, 0.2f, 0.2f);
-    shaderProgram.SetVec3("pointLight[0].diffuse", 0.7f, 0.7f, 0.7f);
+    shaderProgram.SetVec3("pointLight[0].diffuse", 0.0f, 0.7f, 0.7f);
     shaderProgram.SetVec3("pointLight[0].specular", 1.0f, 1.0f, 1.0f);
     // Point Light 2
     shaderProgram.SetVec3("pointLight[1].position", pointLightPositions[1]);
@@ -102,7 +111,7 @@ int main(int argc, char* argv[])
     shaderProgram.SetFloat("pointLight[1].linearAttenuation",    0.09f);
     shaderProgram.SetFloat("pointLight[1].quadraticAttenuation", 0.032f);
     shaderProgram.SetVec3("pointLight[1].ambient", 0.2f, 0.2f, 0.2f);
-    shaderProgram.SetVec3("pointLight[1].diffuse", 0.7f, 0.7f, 0.7f);
+    shaderProgram.SetVec3("pointLight[1].diffuse", 0.7f, 0.0f, 0.7f);
     shaderProgram.SetVec3("pointLight[1].specular", 1.0f, 1.0f, 1.0f);
     // Point Light 3
     shaderProgram.SetVec3("pointLight[2].position", pointLightPositions[2]);
@@ -110,7 +119,7 @@ int main(int argc, char* argv[])
     shaderProgram.SetFloat("pointLight[2].linearAttenuation",    0.09f);
     shaderProgram.SetFloat("pointLight[2].quadraticAttenuation", 0.032f);
     shaderProgram.SetVec3("pointLight[2].ambient", 0.2f, 0.2f, 0.2f);
-    shaderProgram.SetVec3("pointLight[2].diffuse", 0.7f, 0.7f, 0.7f);
+    shaderProgram.SetVec3("pointLight[2].diffuse", 0.7f, 0.7f, 0.0f);
     shaderProgram.SetVec3("pointLight[2].specular", 1.0f, 1.0f, 1.0f);
     // Point Light 4
     shaderProgram.SetVec3("pointLight[3].position", pointLightPositions[3]);
@@ -130,9 +139,15 @@ int main(int argc, char* argv[])
     SDL_Event event;
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_STENCIL_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    stbi_set_flip_vertically_on_load(true);                     // Backpack model has a pre-flipped texture, which needs flipping back to the flipped version, as the model-loader flips the model-UVs.
     Model backpack("../../resources/Backpack/backpack.obj");
+    stbi_set_flip_vertically_on_load(false);                    // Swap back to normal flipping.
+    Model grass("../../resources/Grass/grass.obj");
+    Model windowPane("../../resources/Window/window.obj");
 
     while (running)
     {
@@ -149,10 +164,6 @@ int main(int argc, char* argv[])
         projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 800.0f / 600.0f, 0.1f, 100.0f);
         shaderProgram.SetVec3("viewPos", camera.GetPosition());
 
-        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-        glStencilFunc(GL_ALWAYS, 1, 0xFF);
-        glStencilMask(0xFF);                        // Enables writing to the stencil buffer
-
         shaderProgram.Use();
 
         unsigned int modelMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "modelMatrix");
@@ -164,28 +175,32 @@ int main(int argc, char* argv[])
 
         backpack.Draw(shaderProgram);
 
-        glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-        glStencilMask(0x00);                  // Disables writing to the stencil buffer
-        glDisable(GL_DEPTH_TEST);
+        blendingShader.Use();
 
-        outlineShader.Use();
-
-        // Scale up backpack for outlining
-        modelMatrix = glm::scale(modelMatrix, glm::vec3(1.05f, 1.05f, 1.05f));
-
-        modelMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "modelMatrix");
-        viewMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "viewMatrix");
-        projectionMatrixUniformLocation = glGetUniformLocation(outlineShader.GetID(), "projectionMatrix");
+        modelMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "modelMatrix");
+        viewMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "viewMatrix");
+        projectionMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "projectionMatrix");
         glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
         glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-        backpack.Draw(outlineShader);
+        std::map<float, glm::vec3> sorted;
+        for (unsigned int i = 0; i < windowPanePositions->length(); i++)
+        {
+            float distance = glm::length(camera.GetPosition() - windowPanePositions[i]);
+            sorted[distance] = windowPanePositions[i];
+        }
+
+        for(std::map<float,glm::vec3>::reverse_iterator it = sorted.rbegin(); it != sorted.rend(); ++it) 
+        {
+            modelMatrix = glm::mat4(1.0f);
+            modelMatrix = glm::translate(modelMatrix, it->second);		
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));		
+            glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            windowPane.Draw(blendingShader);
+        }  
 
         modelMatrix = glm::mat4(1.0f);
-        glStencilMask(0xFF);
-        glStencilFunc(GL_ALWAYS, 1, 0xFF);   
-        glEnable(GL_DEPTH_TEST);
 
         SDL_GL_SwapWindow(window);
     }
