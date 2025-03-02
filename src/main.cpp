@@ -33,6 +33,17 @@ glm::vec3 windowPanePositions[] = {
     glm::vec3(-1.0f,  0.0f,  1.0f)
 };
 
+float frameBufferQuad[] = {  
+    // positions   // texCoords
+    -1.0f,  1.0f,  0.0f, 1.0f,
+    -1.0f, -1.0f,  0.0f, 0.0f,
+     1.0f, -1.0f,  1.0f, 0.0f,
+
+    -1.0f,  1.0f,  0.0f, 1.0f,
+     1.0f, -1.0f,  1.0f, 0.0f,
+     1.0f,  1.0f,  1.0f, 1.0f
+};
+
 float deltaTime = 0.0f;	// Time between current frame and last frame
 float lastFrame = 0.0f; // Time of last frame
 
@@ -84,12 +95,13 @@ int main(int argc, char* argv[])
     /**************** SDL INITIALISATION ****************/
     /****************************************************/
 
-    glViewport(0, 0, 800, 600);
+    glViewport(0, 0, 1920, 1080);
 
     Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
     Shader shaderProgram("../../shaders/shader.vs", "../../shaders/shader.fs");
     Shader blendingShader("../../shaders/shader.vs", "../../shaders/blending.fs");
+    Shader framebufferShader("../../shaders/framebufferScreen.vs", "../../shaders/framebufferScreen.fs");
     shaderProgram.Use();
 
     // DirectionalLight
@@ -149,6 +161,59 @@ int main(int argc, char* argv[])
     Model grass("../../resources/Grass/grass.obj");
     Model windowPane("../../resources/Window/window.obj");
 
+    // Create the drawable frame-buffer.
+    unsigned int frameBuffer;
+    glGenFramebuffers(1, &frameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+
+    // Create the colour component of the frame-buffer through a texture that can be read from the GPU.
+    unsigned int textureColourBuffer;
+    glGenTextures(1, &textureColourBuffer);
+    glBindTexture(GL_TEXTURE_2D, textureColourBuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1920, 1080, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Attach the texture to the currently bound frame-buffer object.
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColourBuffer, 0);
+
+    // Create the depth and stencil components of the frame-buffer using a render-buffer object, which cannot be read from the GPU (efficiently).
+    unsigned int rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1920, 1080);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    // Attach the render-buffer object to the currently bound frame-buffer object.
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    // Check that the frame-buffer is complete.
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        std::cout << "ERROR:FRAMEBUFFER::NOT::COMPLETE" << std::endl;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Set up the screen-space quad to render the frameBuffer to the screen.
+    unsigned int fbVBO, fbVAO;
+    glGenVertexArrays(1, &fbVAO);
+    glBindVertexArray(fbVAO);
+
+    glGenBuffers(1, &fbVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, fbVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(frameBufferQuad), frameBufferQuad, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+
     while (running)
     {
         float currentFrame = (double)SDL_GetTicks() / 1000;
@@ -157,11 +222,14 @@ int main(int argc, char* argv[])
 
         running = ProcessInput(window, event, camera);
 
+        // Bind off-screen frame-buffer to render to a texture.
+        glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
 
         viewMatrix = camera.GetViewMatrix();
-        projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 800.0f / 600.0f, 0.1f, 100.0f);
+        projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 1920.0f / 1080.0f, 0.1f, 100.0f);
         shaderProgram.SetVec3("viewPos", camera.GetPosition());
 
         shaderProgram.Use();
@@ -185,7 +253,8 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
         std::map<float, glm::vec3> sorted;
-        for (unsigned int i = 0; i < windowPanePositions->length(); i++)
+        const unsigned int noPanes = sizeof(windowPanePositions) / sizeof(windowPanePositions[0]);
+        for (unsigned int i = 0; i < noPanes; i++)
         {
             float distance = glm::length(camera.GetPosition() - windowPanePositions[i]);
             sorted[distance] = windowPanePositions[i];
@@ -201,6 +270,18 @@ int main(int argc, char* argv[])
         }  
 
         modelMatrix = glm::mat4(1.0f);
+
+        // Render the texture to the screen-space frame-buffer quad to allow for post-processing.
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        framebufferShader.Use();
+        glBindVertexArray(fbVAO);
+        glDisable(GL_DEPTH_TEST);
+        glBindTexture(GL_TEXTURE_2D, textureColourBuffer);
+        glUniform1i(glGetUniformLocation(framebufferShader.GetID(), "screenTexture"), 0);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         SDL_GL_SwapWindow(window);
     }
