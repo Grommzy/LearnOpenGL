@@ -18,6 +18,17 @@
 /* Prototypes */
 void FramebufferSize_Callback(SDL_Window* window, int width, int height);
 bool ProcessInput(SDL_Window* window, SDL_Event& event, Camera& camera);
+unsigned int LoadCubeMap(std::vector<std::string> faces);
+
+std::vector<std::string> cubeMapFaces
+{
+    "../../resources/skybox/right.jpg",
+    "../../resources/skybox/left.jpg",
+    "../../resources/skybox/top.jpg",
+    "../../resources/skybox/bottom.jpg",
+    "../../resources/skybox/front.jpg",
+    "../../resources/skybox/back.jpg"
+};
 
 glm::vec3 pointLightPositions[] = {
 	glm::vec3( 0.7f,  0.2f,  2.0f),
@@ -42,6 +53,51 @@ float frameBufferQuad[] = {
     -1.0f,  1.0f,  0.0f, 1.0f,
      1.0f, -1.0f,  1.0f, 0.0f,
      1.0f,  1.0f,  1.0f, 1.0f
+};
+
+float skyboxVertices[] = {
+    // positions          
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    -1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f
 };
 
 float deltaTime = 0.0f;	// Time between current frame and last frame
@@ -102,6 +158,9 @@ int main(int argc, char* argv[])
     Shader shaderProgram("../../shaders/shader.vs", "../../shaders/shader.fs");
     Shader blendingShader("../../shaders/shader.vs", "../../shaders/blending.fs");
     Shader framebufferShader("../../shaders/framebufferScreen.vs", "../../shaders/framebufferScreen.fs");
+    Shader skyboxShader("../../shaders/skybox.vs", "../../shaders/skybox.fs");
+    Shader reflectiveShader("../../shaders/reflectiveMaterial.vs", "../../shaders/reflectiveMaterial.fs");
+    Shader refractiveShader("../../shaders/refractiveMaterial.vs", "../../shaders/refractiveMaterial.fs");
     shaderProgram.Use();
 
     // DirectionalLight
@@ -213,6 +272,24 @@ int main(int argc, char* argv[])
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
+    // Create Cube-Map texture.
+    unsigned int cubeMapTexture = LoadCubeMap(cubeMapFaces);
+
+    // Set up the cube to render the Cube-Map texture to.
+    unsigned int cmVBO, cmVAO;
+
+    glGenVertexArrays(1, &cmVAO);
+    glBindVertexArray(cmVAO);
+
+    glGenBuffers(1, &cmVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cmVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
     while (running)
     {
@@ -234,6 +311,7 @@ int main(int argc, char* argv[])
 
         shaderProgram.Use();
 
+        glDepthMask(GL_TRUE);
         unsigned int modelMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "modelMatrix");
         unsigned int viewMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "viewMatrix");
         unsigned int projectionMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "projectionMatrix");
@@ -243,7 +321,59 @@ int main(int argc, char* argv[])
 
         backpack.Draw(shaderProgram);
 
+        reflectiveShader.Use();
+
+        modelMatrix = glm::mat4(1.0);
+        modelMatrix = glm::translate(modelMatrix, glm::vec3(-5.0f, 0.0f, 0.0f));
+
+        modelMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "modelMatrix");
+        viewMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "viewMatrix");
+        projectionMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "projectionMatrix");
+        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        reflectiveShader.SetVec3("cameraPosition", camera.GetPosition());
+
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+
+        backpack.Draw(reflectiveShader);
+
+        refractiveShader.Use();
+
+        modelMatrix = glm::mat4(1.0);
+        modelMatrix = glm::translate(modelMatrix, glm::vec3(5.0f, 0.0f, 0.0f));
+
+        modelMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "modelMatrix");
+        viewMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "viewMatrix");
+        projectionMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "projectionMatrix");
+        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        refractiveShader.SetVec3("cameraPosition", camera.GetPosition());
+
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+
+        backpack.Draw(refractiveShader);
+
+        skyboxShader.Use();
+
+        viewMatrix = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+
+        glDepthFunc(GL_LEQUAL);
+        viewMatrixUniformLocation = glGetUniformLocation(skyboxShader.GetID(), "viewMatrix");
+        projectionMatrixUniformLocation = glGetUniformLocation(skyboxShader.GetID(), "projectionMatrix");
+        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        glBindVertexArray(cmVAO);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glDepthFunc(GL_LESS);
+
         blendingShader.Use();
+        viewMatrix = camera.GetViewMatrix();
 
         modelMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "modelMatrix");
         viewMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "viewMatrix");
@@ -339,4 +469,37 @@ bool ProcessInput(SDL_Window* window, SDL_Event& event, Camera& camera)
     if (keyboardState[SDL_SCANCODE_D]) camera.ProcessKeyboard(RIGHT, deltaTime);
 
     return true;
+}
+
+unsigned int LoadCubeMap(std::vector<std::string> faces)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, noChannels;
+
+    for (unsigned int i = 0; i < faces.size(); i++)
+    {
+        unsigned char* data = stbi_load(faces[i].c_str(), &width, &height, &noChannels, 0);
+
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+        }
+        else
+        {
+            std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
 }
