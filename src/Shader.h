@@ -16,17 +16,19 @@ public:
     void Use();
 
     // Utility uniform function - Boolean
-    void SetBool(const std::string &name, bool value) const;
+    void SetBool(const std::string& name, bool value) const;
     
     // Utility uniform function - Int
-    void SetInt(const std::string &name, int value) const;
+    void SetInt(const std::string& name, int value) const;
     
     // Utility uniform function - Float
-    void SetFloat(const std::string &name, float value) const;
+    void SetFloat(const std::string& name, float value) const;
 
     // Utility uniform function - Vector3
-    void SetVec3(const std::string &name, float x, float y, float z) const;
-    void SetVec3(const std::string &name, const glm::vec3 &value) const;
+    void SetVec3(const std::string& name, float x, float y, float z) const;
+    void SetVec3(const std::string& name, const glm::vec3& value) const;
+
+    void SetMat4(const std::string& name, const glm::mat4& value) const;
 
     // Retrieve the private ID of the shader
     unsigned int GetID();

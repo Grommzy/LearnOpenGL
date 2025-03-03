@@ -105,8 +105,8 @@ float lastFrame = 0.0f; // Time of last frame
 
 int main(int argc, char* argv[])
 {
-    /****************************************************/
-    /**************** SDL INITIALISATION ****************/
+    //====================================================[ SDL_INITIALIZATION ]====================================================\\ 
+
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
         std::cerr << "Failed to initialise SDL: " << SDL_GetError() << std::endl;
@@ -148,8 +148,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    /**************** SDL INITIALISATION ****************/
-    /****************************************************/
+    //====================================================[ OPENGL SHADER_INITIALIZATION ]====================================================\\ 
 
     glViewport(0, 0, 1920, 1080);
 
@@ -161,6 +160,9 @@ int main(int argc, char* argv[])
     Shader skyboxShader("../../shaders/skybox.vs", "../../shaders/skybox.fs");
     Shader reflectiveShader("../../shaders/reflectiveMaterial.vs", "../../shaders/reflectiveMaterial.fs");
     Shader refractiveShader("../../shaders/refractiveMaterial.vs", "../../shaders/refractiveMaterial.fs");
+
+    //====================================================[ DEFAULT_SHADER LIGHTING_SETUP ]====================================================\\ 
+
     shaderProgram.Use();
 
     // DirectionalLight
@@ -205,14 +207,7 @@ int main(int argc, char* argv[])
     glm::mat4 viewMatrix;
     glm::mat4 projectionMatrix;
 
-    /**************** Render Loop ****************/
-    bool running = true;
-    SDL_Event event;
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_STENCIL_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    //====================================================[ LOAD_MODELS | CUBE_MAPS | FRAMEBUFFERS/RENDERBUFFERS | HARD-CODED_OBJECTS ]====================================================\\ 
 
     stbi_set_flip_vertically_on_load(true);                     // Backpack model has a pre-flipped texture, which needs flipping back to the flipped version, as the model-loader flips the model-UVs.
     Model backpack("../../resources/Backpack/backpack.obj");
@@ -291,6 +286,15 @@ int main(int argc, char* argv[])
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
+    //====================================================[ RENDER_LOOP ]====================================================\\ 
+
+    bool running = true;
+    SDL_Event event;
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_STENCIL_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     while (running)
     {
         float currentFrame = (double)SDL_GetTicks() / 1000;
@@ -312,12 +316,10 @@ int main(int argc, char* argv[])
         shaderProgram.Use();
 
         glDepthMask(GL_TRUE);
-        unsigned int modelMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "modelMatrix");
-        unsigned int viewMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "viewMatrix");
-        unsigned int projectionMatrixUniformLocation = glGetUniformLocation(shaderProgram.GetID(), "projectionMatrix");
-        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        shaderProgram.SetMat4("modelMatrix", modelMatrix);
+        shaderProgram.SetMat4("viewMatrix", viewMatrix);
+        shaderProgram.SetMat4("projectionMatrix", projectionMatrix);
 
         backpack.Draw(shaderProgram);
 
@@ -326,12 +328,9 @@ int main(int argc, char* argv[])
         modelMatrix = glm::mat4(1.0);
         modelMatrix = glm::translate(modelMatrix, glm::vec3(-5.0f, 0.0f, 0.0f));
 
-        modelMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "modelMatrix");
-        viewMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "viewMatrix");
-        projectionMatrixUniformLocation = glGetUniformLocation(reflectiveShader.GetID(), "projectionMatrix");
-        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+        reflectiveShader.SetMat4("modelMatrix", modelMatrix);
+        reflectiveShader.SetMat4("viewMatrix", viewMatrix);
+        reflectiveShader.SetMat4("projectionMatrix", projectionMatrix);
 
         reflectiveShader.SetVec3("cameraPosition", camera.GetPosition());
 
@@ -344,12 +343,9 @@ int main(int argc, char* argv[])
         modelMatrix = glm::mat4(1.0);
         modelMatrix = glm::translate(modelMatrix, glm::vec3(5.0f, 0.0f, 0.0f));
 
-        modelMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "modelMatrix");
-        viewMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "viewMatrix");
-        projectionMatrixUniformLocation = glGetUniformLocation(refractiveShader.GetID(), "projectionMatrix");
-        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+        refractiveShader.SetMat4("modelMatrix", modelMatrix);
+        refractiveShader.SetMat4("viewMatrix", viewMatrix);
+        refractiveShader.SetMat4("projectionMatrix", projectionMatrix);
 
         refractiveShader.SetVec3("cameraPosition", camera.GetPosition());
 
@@ -362,10 +358,9 @@ int main(int argc, char* argv[])
         viewMatrix = glm::mat4(glm::mat3(camera.GetViewMatrix()));
 
         glDepthFunc(GL_LEQUAL);
-        viewMatrixUniformLocation = glGetUniformLocation(skyboxShader.GetID(), "viewMatrix");
-        projectionMatrixUniformLocation = glGetUniformLocation(skyboxShader.GetID(), "projectionMatrix");
-        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        skyboxShader.SetMat4("viewMatrix", viewMatrix);
+        skyboxShader.SetMat4("projectionMatrix", projectionMatrix);
 
         glBindVertexArray(cmVAO);
         glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
@@ -375,12 +370,9 @@ int main(int argc, char* argv[])
         blendingShader.Use();
         viewMatrix = camera.GetViewMatrix();
 
-        modelMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "modelMatrix");
-        viewMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "viewMatrix");
-        projectionMatrixUniformLocation = glGetUniformLocation(blendingShader.GetID(), "projectionMatrix");
-        glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-        glUniformMatrix4fv(viewMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
-        glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+        blendingShader.SetMat4("modelMatrix", modelMatrix);
+        blendingShader.SetMat4("viewMatrix", viewMatrix);
+        blendingShader.SetMat4("projectionMatrix", projectionMatrix);
 
         std::map<float, glm::vec3> sorted;
         const unsigned int noPanes = sizeof(windowPanePositions) / sizeof(windowPanePositions[0]);
@@ -395,7 +387,7 @@ int main(int argc, char* argv[])
             modelMatrix = glm::mat4(1.0f);
             modelMatrix = glm::translate(modelMatrix, it->second);		
             modelMatrix = glm::rotate(modelMatrix, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));		
-            glUniformMatrix4fv(modelMatrixUniformLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            blendingShader.SetMat4("modelMatrix", modelMatrix);
             windowPane.Draw(blendingShader);
         }  
 

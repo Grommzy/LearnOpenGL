@@ -10,8 +10,8 @@ uniform samplerCube skybox;
 void main()
 {
     // float ratio = 1.00 / 1.33;  // Water refraction
-    // float ratio = 1.00 / 1.52;  // Glass refraction
-    float ratio = 1.00 / 2.42;  // Diamond refraction
+    float ratio = 1.00 / 1.52;  // Glass refraction
+    // float ratio = 1.00 / 2.42;  // Diamond refraction
 
     vec3 I = normalize(Position - cameraPosition);
     vec3 R = refract( I, normalize(Normal), ratio);
