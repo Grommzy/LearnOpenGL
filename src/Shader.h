@@ -11,6 +11,7 @@ class Shader
 public:
     // Constructor
     Shader(const char* vertexPath, const char* fragmentPath);
+    Shader(const char* vertexPath, const char* geometryPath, const char* fragmentPath);
 
     // Activate the shader
     void Use();
