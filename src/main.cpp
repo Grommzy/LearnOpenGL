@@ -100,8 +100,9 @@ float skyboxVertices[] = {
      1.0f, -1.0f,  1.0f
 };
 
-float deltaTime = 0.0f;	// Time between current frame and last frame
-float lastFrame = 0.0f; // Time of last frame
+double deltaTime   = 0.0;
+double deltaTimeMS = 0.0;
+Uint64 lastHiRezCount = SDL_GetPerformanceCounter();
 
 int main(int argc, char* argv[])
 {
@@ -297,10 +298,17 @@ int main(int argc, char* argv[])
 
     while (running)
     {
-        float currentFrame = (double)SDL_GetTicks() / 1000;
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+        // Using the windows High Resolution Counter to get a more accurate delta-time.
+        Uint64 currentHiRezCount = SDL_GetPerformanceCounter();
 
+        deltaTime   = (double)(currentHiRezCount - lastHiRezCount) / SDL_GetPerformanceFrequency();
+        deltaTimeMS = deltaTime * 1000;
+
+        lastHiRezCount = currentHiRezCount;
+        double fps     = 1.0 / deltaTime;
+
+        std::cout << "\33[2K\r" << fps; // Output the FPS, whilst deleting the current line to replace the FPS value. This will likely get removed if any logging needs to be done.
+        
         running = ProcessInput(window, event, camera);
 
         // Bind off-screen frame-buffer to render to a texture.
