@@ -6,9 +6,12 @@ layout (location = 2) in vec2 aTexCoords;
 out vec3 Normal;
 out vec3 Position;
 
+layout (std140) uniform Matrices
+{
+    uniform mat4 projectionMatrix;
+    uniform mat4 viewMatrix;
+};
 uniform mat4 modelMatrix;
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
 
 void main()
 {

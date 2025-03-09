@@ -104,6 +104,8 @@ double deltaTime   = 0.0;
 double deltaTimeMS = 0.0;
 Uint64 lastHiRezCount = SDL_GetPerformanceCounter();
 
+unsigned int uboMatrices;
+
 int main(int argc, char* argv[])
 {
     //====================================================[ SDL_INITIALIZATION ]====================================================\\ 
@@ -287,6 +289,37 @@ int main(int argc, char* argv[])
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
+    // Creating and initialising Uniform Buffer Objects.
+    unsigned int matricesBlockIndex         = glGetUniformBlockIndex(shaderProgram.GetID()   , "Matrices");
+    unsigned int matricesBlockIndexBlending = glGetUniformBlockIndex(blendingShader.GetID()  , "Matrices");
+    unsigned int matricesBlockIndexSkybox   = glGetUniformBlockIndex(skyboxShader.GetID()    , "Matrices");
+    unsigned int matricesBlockIndexReflect  = glGetUniformBlockIndex(reflectiveShader.GetID(), "Matrices");
+    unsigned int matricesBlockIndexRefract  = glGetUniformBlockIndex(refractiveShader.GetID(), "Matrices");
+
+    // Set shaders as looking for the Matrices Uniform Buffer Object at block binding "0".
+    glUniformBlockBinding(shaderProgram.GetID()   , matricesBlockIndex        , 0);
+    glUniformBlockBinding(blendingShader.GetID()  , matricesBlockIndexBlending, 0);
+    glUniformBlockBinding(skyboxShader.GetID()    , matricesBlockIndexSkybox  , 0);
+    glUniformBlockBinding(reflectiveShader.GetID(), matricesBlockIndexReflect , 0);
+    glUniformBlockBinding(refractiveShader.GetID(), matricesBlockIndexRefract , 0);
+
+    // unsigned int uboMatrices -> This variable was already set in global space to allow for external functions to change it.
+    glGenBuffers(1, &uboMatrices);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+    glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+    // Bind the uniform buffer object to the block "0".
+    glBindBufferRange(GL_UNIFORM_BUFFER, 0, uboMatrices, 0, 2* sizeof(glm::mat4));
+
+    // Set the Projection Matrix uniform buffer.
+    projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 1920.0f / 1080.0f, 0.1f, 100.0f);
+    glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(projectionMatrix));
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+
     //====================================================[ RENDER_LOOP ]====================================================\\ 
 
     bool running = true;
@@ -298,7 +331,7 @@ int main(int argc, char* argv[])
 
     while (running)
     {
-        // Using the windows High Resolution Counter to get a more accurate delta-time.
+        // Using the High Resolution Counter to get a more accurate delta-time.
         Uint64 currentHiRezCount = SDL_GetPerformanceCounter();
 
         deltaTime   = (double)(currentHiRezCount - lastHiRezCount) / SDL_GetPerformanceFrequency();
@@ -317,8 +350,12 @@ int main(int argc, char* argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
 
+        // Set the view-matrix in the Matrices Uniform Buffer Object.
         viewMatrix = camera.GetViewMatrix();
-        projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 1920.0f / 1080.0f, 0.1f, 100.0f);
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMatrix));
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
         shaderProgram.SetVec3("viewPos", camera.GetPosition());
 
         shaderProgram.Use();
@@ -326,8 +363,6 @@ int main(int argc, char* argv[])
         glDepthMask(GL_TRUE);
 
         shaderProgram.SetMat4("modelMatrix", modelMatrix);
-        shaderProgram.SetMat4("viewMatrix", viewMatrix);
-        shaderProgram.SetMat4("projectionMatrix", projectionMatrix);
 
         backpack.Draw(shaderProgram);
 
@@ -337,8 +372,6 @@ int main(int argc, char* argv[])
         modelMatrix = glm::translate(modelMatrix, glm::vec3(-5.0f, 0.0f, 0.0f));
 
         reflectiveShader.SetMat4("modelMatrix", modelMatrix);
-        reflectiveShader.SetMat4("viewMatrix", viewMatrix);
-        reflectiveShader.SetMat4("projectionMatrix", projectionMatrix);
 
         reflectiveShader.SetVec3("cameraPosition", camera.GetPosition());
 
@@ -352,8 +385,6 @@ int main(int argc, char* argv[])
         modelMatrix = glm::translate(modelMatrix, glm::vec3(5.0f, 0.0f, 0.0f));
 
         refractiveShader.SetMat4("modelMatrix", modelMatrix);
-        refractiveShader.SetMat4("viewMatrix", viewMatrix);
-        refractiveShader.SetMat4("projectionMatrix", projectionMatrix);
 
         refractiveShader.SetVec3("cameraPosition", camera.GetPosition());
 
@@ -363,12 +394,13 @@ int main(int argc, char* argv[])
 
         skyboxShader.Use();
 
+        // Swap the view-matrix to an untransformed variant before rebuffering to the Matrices Uniform buffer Object.
         viewMatrix = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMatrix));
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
         glDepthFunc(GL_LEQUAL);
-
-        skyboxShader.SetMat4("viewMatrix", viewMatrix);
-        skyboxShader.SetMat4("projectionMatrix", projectionMatrix);
 
         glBindVertexArray(cmVAO);
         glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
@@ -376,11 +408,14 @@ int main(int argc, char* argv[])
         glDepthFunc(GL_LESS);
 
         blendingShader.Use();
+
+        // Reset the view matrix.
         viewMatrix = camera.GetViewMatrix();
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMatrix));
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
         blendingShader.SetMat4("modelMatrix", modelMatrix);
-        blendingShader.SetMat4("viewMatrix", viewMatrix);
-        blendingShader.SetMat4("projectionMatrix", projectionMatrix);
 
         std::map<float, glm::vec3> sorted;
         const unsigned int noPanes = sizeof(windowPanePositions) / sizeof(windowPanePositions[0]);
@@ -459,6 +494,11 @@ bool ProcessInput(SDL_Window* window, SDL_Event& event, Camera& camera)
             case SDL_EVENT_MOUSE_WHEEL:
             {
                 camera.ProcessMouseScroll((float)event.wheel.y);
+                
+                glm::mat4 projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 1920.0f / 1080.0f, 0.1f, 100.0f);
+                glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+                glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(projectionMatrix));
+                glBindBuffer(GL_UNIFORM_BUFFER, 0);
             }
         }
     }

@@ -3,8 +3,11 @@ layout (location = 0) in vec3 aPos;
 
 out vec3 TexCoords;
 
-uniform mat4 projectionMatrix;
-uniform mat4 viewMatrix;
+layout (std140) uniform Matrices
+{
+    uniform mat4 projectionMatrix;
+    uniform mat4 viewMatrix;
+};
 
 void main()
 {
