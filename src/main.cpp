@@ -18,13 +18,6 @@
 /* Prototypes */
 bool ProcessInput(SDL_Window* window, SDL_Event& event);
 
-float points[] = {
-    -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, // top-left
-     0.5f,  0.5f, 0.0f, 1.0f, 0.0f, // top-right
-     0.5f, -0.5f, 0.0f, 0.0f, 1.0f, // bottom-right
-    -0.5f, -0.5f, 1.0f, 1.0f, 0.0f  // bottom-left
-};
-
 double deltaTime   = 0.0;
 double deltaTimeMS = 0.0;
 Uint64 lastHiRezCount = SDL_GetPerformanceCounter();
@@ -80,24 +73,8 @@ int main(int argc, char* argv[])
 
     glViewport(0, 0, 1920, 1080);
     Shader shaderProgram("../../shaders/shader.vs", "../../shaders/shader.gs", "../../shaders/shader.fs");
-
-    unsigned int vao, vbo;
-
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    Model backpack("../../resources/Backpack/backpack.obj");
+    Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
     //====================================================[ RENDER_LOOP ]====================================================\\ 
 
@@ -128,9 +105,16 @@ int main(int argc, char* argv[])
         glEnable(GL_DEPTH_TEST);
 
         shaderProgram.Use();
+
+        glm::mat4 projectionMatrix = glm::perspective(glm::radians(camera.GetFOV()), 1920.0f / 1080.0f, 1.0f, 100.0f);
+        glm::mat4 viewMatrix = camera.GetViewMatrix();
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        shaderProgram.SetMat4("projectionMatrix", projectionMatrix);
+        shaderProgram.SetMat4("viewMatrix", viewMatrix);
+        shaderProgram.SetMat4("modelMatrix", modelMatrix);
+
         shaderProgram.SetFloat("time", (float)runningSeconds);
-        glBindVertexArray(vao);
-        glDrawArrays(GL_POINTS, 0, 4);
+        backpack.Draw(shaderProgram);
 
         SDL_GL_SwapWindow(window);
     }
